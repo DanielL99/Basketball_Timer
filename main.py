@@ -14,6 +14,7 @@
 # import RPi.GPIO as GPIO
 import threading
 import time
+import datetime
 from tkinter import *
 
 # GPIO-Pins für die Knöpfe definieren
@@ -26,6 +27,7 @@ RESET_PIN = 24
 # Countdown-Zeiten in Sekunden
 countdown_time = 0
 pause = False
+pause_start_time = None
 countdown_thread = None
 
 # GPIO initialisieren
@@ -42,34 +44,53 @@ root = Tk()
 root.title("Countdown Timer")
 
 # Label für die Countdown-Anzeige
-countdown_label = Label(root, font=("Helvetica", 48), text="")
+countdown_label = Label(root, font=("Seven Segment", 100), text="")
 countdown_label.pack()
 
 # Funktion für das Aktualisieren der Anzeige
 def update_display():
-    countdown_label.config(text=f"Countdown: {countdown_time} s")
-    root.after(1000, update_display)
+    if countdown_time < 0:
+        seconds = 0
+        milliseconds = 0
+    else:
+        seconds = int(countdown_time)
+        milliseconds = int((countdown_time - int(countdown_time)) * 10)
+    countdown_label.config(text=f"{seconds:02}:{milliseconds:01}")
+    root.after(100, update_display)  # Update every 100 milliseconds
 
 # Funktionen für die Button-Events
 def start_countdown_24(channel):
-    global countdown_time
+    global countdown_time, stop_thread, countdown_thread
+    stop_thread = True
+    if countdown_thread is not None:
+        countdown_thread.join()  # Wait for the existing thread to stop
+    stop_thread = False
     countdown_time = 24
     update_display()
     start_countdown(None)
 
-def start_countdown_12(channel):
-    global countdown_time
+def start_countdown_14(channel):
+    global countdown_time, stop_thread, countdown_thread
+    stop_thread = True
+    if countdown_thread is not None:
+        countdown_thread.join()  # Wait for the existing thread to stop
     countdown_time = 14
     update_display()
     start_countdown(None)
 
 def plus_one(channel):
-    global countdown_time
+    global countdown_time, stop_thread, countdown_thread
+    stop_thread = True
+    if countdown_thread is not None:
+        countdown_thread.join()  # Wait for the existing thread to stop
     countdown_time += 1
     update_display()
 
 def minus_one(channel):
-    global countdown_time
+    global countdown_time, stop_thread, countdown_thread
+    stop_thread = True
+    if countdown_thread is not None:
+        countdown_thread.join()  # Wait for the existing thread to stop
     if countdown_time > 0:
         countdown_time -= 1
         update_display()
@@ -80,19 +101,26 @@ def reset(channel):
     update_display()
 
 def run_countdown():
-    global countdown_time, pause
-    while countdown_time > 0:
+    global countdown_time, pause, pause_start_time, stop_thread
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=countdown_time)
+    while countdown_time > 0 and not stop_thread:
         if pause:
-            time.sleep(1)
+            if pause_start_time is None:
+                pause_start_time = datetime.datetime.now()
+            time.sleep(.1)
             continue
-        countdown_time -= 1
+        if pause_start_time is not None:
+            end_time += datetime.datetime.now() - pause_start_time
+            pause_start_time = None
+        countdown_time = (end_time - datetime.datetime.now()).total_seconds()
         update_display()
-        time.sleep(1)
+        time.sleep(.1)  # Sleep for 100 milliseconds
 
 def start_countdown(event):
-    global pause, countdown_thread
+    global pause, countdown_thread, pause_start_time
     if pause:
         pause = False
+        # pause_start_time = None
         if countdown_thread is None or not countdown_thread.is_alive():
             countdown_thread = threading.Thread(target=run_countdown)
             countdown_thread.start()
@@ -111,7 +139,7 @@ root.bind('<space>', start_countdown)
 
 # Bind keyboard events to the functions
 root.bind('1', start_countdown_24)
-root.bind('2', start_countdown_12)
+root.bind('2', start_countdown_14)
 root.bind('3', plus_one)
 root.bind('4', minus_one)
 root.bind('5', reset)
